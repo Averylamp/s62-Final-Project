@@ -38,21 +38,25 @@ def add_block(previousHash, name, nonce, seed = False):
     work = hashed_block_information["work"]
     height = -1
     workTarget = 0
+    current_time = time.time()
+    blockTime = 0
     if not seed:
         
         try:
             previousBlock = block_information[previousHash]
             height = previousBlock["height"] + 1
             workTarget = previousBlock["targetWork"]
+            blockTime = current_time - previousBlock["timestamp"]
         except:
             raise ValueError("Previous block hash does not exist")
     else:
         height = 0
 
-
+    
     block =  {
         "height": height,
-        "timestamp": time.time(),
+        "timestamp": current_time,
+        "blockTime": blockTime, 
         "blockHash": blockHash,
         "work" : work,
         "blockInformation":block_data
@@ -63,6 +67,8 @@ def add_block(previousHash, name, nonce, seed = False):
     if work >= workTarget:
         print("Adding block to blockchain")
         add_checked_block(block)
+        if seed:
+            return block
         return jsonify(block)
     else:
         raise ValueError("Not enough work to satisfy target: {} / {}".format(work, workTarget))
@@ -91,8 +97,8 @@ def add_checked_block(block):
 
 def calculate_target_work_for_block(block):
     global block_information
-    target = 15
-    targetInterval = 25 #interval in seconds
+    target = 20
+    targetInterval = 2 #interval in seconds
     threshold = 1.5
     number_of_previous_block_to_look_at = 15
     number_of_blocks_to_recalculate_on = 10
@@ -177,7 +183,7 @@ def get_full_chain():
     while True:
         if blockHash in block_information:
             block = block_information[blockHash]
-            blocks.append("Height - {}, Hash - {}, name - {}, nonce - {}".format(block["height"], block["blockHash"], block["blockInformation"]["name"], block["blockInformation"]["nonce"]))
+            blocks.append("Height - {}, Target Difficulty - {}, Hash - {}, name - {}, nonce - {}".format(block["height"], block["targetWork"], block["blockHash"], block["blockInformation"]["name"], block["blockInformation"]["nonce"]))
             blockHash = block["blockInformation"]["previousHash"]
         else:
             break
@@ -251,25 +257,13 @@ if __name__ == '__main__':
         block_information = dict()
 
         print("Failed deserialization of cached results")
+        try:
+            blockHash = add_block("", "", "", True)["blockHash"]
+        except ValueError as e:
+            print(e)
+            pass
         pass
-    try:
-        blockHash = add_block("", "", "", True)["blockHash"]
-        i = 0
-
-        while i < 1000000:
-            try:
-                blockHash = add_block(blockHash, "turtle", "{}".format(i))["blockHash"]
-                print("Block Accepted")
-                print(block_information[blockHash])
-            except ValueError as e:
-                pass
-
-            i +=1
-        print(block_information)
-    except ValueError as e:
-        print(e)
-        pass
-
+    
     threading.Timer(60.0, write_information_to_memory).start()
 
     app.run(host="127.0.0.1", debug=True)

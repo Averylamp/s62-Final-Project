@@ -95,13 +95,47 @@ def add_checked_block(block):
         highest_block.append(block)
         print("Equal Height Block")
 
+def monero_difficulty(block):
+    global block_information
+    target = 19.0
+    targetInterval = 1.0 #interval in seconds
+    number_of_previous_block_to_look_at = 20
+    extremes_to_strip = 3
+    previousBlockTimes = []
+    previousBlockHash = block["blockInformation"]["previousHash"]
+    if previousBlockHash in block_information:
+        previousBlock = block_information[previousBlockHash]
+        target = previousBlock["targetWork"]
+    
+    while len(previousBlockTimes) < number_of_previous_block_to_look_at:
+        if previousBlockHash in block_information:
+            previousBlock = block_information[previousBlockHash]
+            previousBlockTimes.append((previousBlock["blockTime"], previousBlock["targetWork"]))
+            previousBlockHash = previousBlock["blockInformation"]["previousHash"]
+        else:
+            break
+
+    if len(previousBlockTimes) > extremes_to_strip * 2 + 1:
+        
+        block_times = sorted(previousBlockTimes)[extremes_to_strip:][:-extremes_to_strip]
+        print(block_times)
+        total_time = sum(blockTime[0] for blockTime in block_times)
+        average_difficulty = sum(blockTime[1] for blockTime in block_times) / len(block_times)
+
+        expected_difference = targetInterval * len(previousBlockTimes)
+        difficulty_change = math.log(total_time / expected_difference, 2.0)
+
+        target = average_difficulty - difficulty_change
+        print("Time {} vs {}, average_difficulty {}, change {}, new_target {}".format(total_time, expected_difference, average_difficulty, difficulty_change, target))
+
+    return target
 
 def bitcoin_difficulty(block):
     global block_information
     target = 19.0
-    targetInterval = 0.5 #interval in seconds
-    number_of_previous_block_to_look_at = 20
-    number_of_blocks_to_recalculate_on = 20
+    targetInterval = 1.0 #interval in seconds
+    number_of_previous_block_to_look_at = 10
+    number_of_blocks_to_recalculate_on = 10
     previousBlockTimes = []
     previousBlockHash = block["blockInformation"]["previousHash"]
     if previousBlockHash in block_information:
@@ -129,6 +163,7 @@ def bitcoin_difficulty(block):
     return target
 
 def calculate_target_work_for_block(block):
+    # return monero_difficulty(block)
     return bitcoin_difficulty(block)
     global block_information
     target = 20
@@ -207,6 +242,32 @@ def get_scores():
     for scoreset in sorted_scores:
         response.append("Score: {},  Name: {}".format(scoreset[1], scoreset[0]))
     return jsonify(response)
+
+@app.route('/getallblocks/', methods = ["GET"])
+def get_all_blocks():
+    global block_information
+    all_blocks = block_information.values()
+    
+    # print(all_blocks)
+    all_blocks = sorted(all_blocks,key= lambda x: x["timestamp"], reverse = True )
+    return jsonify(all_blocks)
+
+@app.route('/getalltips/', methods = ["GET"])
+def get_all_tips():
+    global block_information
+    all_blocks = []
+    connected_blocks = set()
+    for key in block_information:
+        block = block_information[key]
+        connected_blocks.add(block["blockInformation"]["previousHash"])
+    tip_hashes = set(block_information.keys()).difference(connected_blocks)
+    print("tip hashes")
+    print(tip_hashes)
+    for tipHash in tip_hashes:
+        all_blocks.append(block_information[tipHash])
+    # print(all_blocks)
+    all_blocks = sorted(all_blocks,key= lambda x: x["height"], reverse = True )
+    return jsonify(all_blocks)
 
 @app.route('/getchain/', methods = ["GET"])
 def get_full_chain():

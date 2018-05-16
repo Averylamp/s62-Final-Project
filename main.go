@@ -135,6 +135,7 @@ func main() {
 					if generatedBlock.ValidMine(currentTip.TargetWork) {
 						fmt.Println("Submitting block from ", coreNum)
 						calculatedBlockChannel <- generatedBlock
+						fmt.Println("Submitting block from ", coreNum)
 					}
 					count += totalCPUS
 				}
@@ -147,8 +148,14 @@ func main() {
 
 		select {
 		case calculatedBlock := <-calculatedBlockChannel:
-			fmt.Println("Submitting block " + calculatedBlock.ToString())
-			SendBlockToServer(calculatedBlock)
+			tip, err := GetTipFromServer()
+			if err != nil {
+				fmt.Print("Error getting tip from server ")
+			}
+			if currentTip == tip {
+				fmt.Println("Submitting block " + calculatedBlock.ToString())
+				SendBlockToServer(calculatedBlock)
+			}
 			break
 		case <-time.After(1000 * time.Millisecond):
 			break
@@ -162,12 +169,9 @@ func main() {
 			fmt.Println("New tip found ")
 			for i := 0; i < cpus; i++ {
 				select {
-				case x, ok := <-calculatedBlockChannel: // Clears double blocks
-					if ok {
-						fmt.Printf("Value %d was read.\n", x)
-					} else {
-						fmt.Println("Channel closed!")
-					}
+				case x := <-calculatedBlockChannel: // Clears double blocks
+					fmt.Printf("Value %d was read.\n", x)
+
 				default:
 					break
 				}

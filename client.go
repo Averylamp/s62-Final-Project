@@ -41,8 +41,8 @@ func GetTipFromServer() (Block, error) {
 
 	response, err := http.Get("http://localhost:5000/getlatest")
 	if err != nil {
-		fmt.Printf("%s", err)
-		os.Exit(1)
+		fmt.Println("%s", err)
+		return bl, err
 	}
 
 	defer response.Body.Close()

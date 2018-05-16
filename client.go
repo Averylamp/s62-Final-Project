@@ -10,21 +10,22 @@ import (
 )
 
 type ServerBlock struct {
-	PreviousHash string `json:"blockHash"`
-	TargetWork   int64  `json:"targetWork"`
-	Height       int64  `json:"height"`
+	PreviousHash string  `json:"blockHash"`
+	TargetWork   float64 `json:"targetWork"`
+	Height       int64   `json:"height"`
 }
 
 var cachedServerBlock *ServerBlock
 var cachedName = "avery"
 var lastSubmittedHeight *int
+var cachingEnable = true
 
 // GetTipFromServer connects to the server and gets the tip of the blockchain.
 // Can return an error if the connection doesn't work or the server is sending
 // invalid data that doesn't look like a block.
 func GetTipFromServer() (Block, error) {
 	var bl Block
-	if cachedServerBlock != nil {
+	if cachedServerBlock != nil && cachingEnable {
 		hashbytes, err := hex.DecodeString(cachedServerBlock.PreviousHash)
 		if err != nil {
 			return bl, err
@@ -50,7 +51,7 @@ func GetTipFromServer() (Block, error) {
 		fmt.Printf("%s", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%s\n", string(contents))
+	// fmt.Printf("%s\n", string(contents))
 
 	if err := json.Unmarshal(contents, &cachedServerBlock); err != nil {
 		panic(err)

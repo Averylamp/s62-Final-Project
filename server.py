@@ -5,6 +5,7 @@ import hashlib
 import pickle
 import time
 from flask_cors import CORS
+import math
 
 app = Flask(__name__)
 CORS(app)
@@ -95,7 +96,40 @@ def add_checked_block(block):
         print("Equal Height Block")
 
 
+def bitcoin_difficulty(block):
+    global block_information
+    target = 19.0
+    targetInterval = 0.5 #interval in seconds
+    number_of_previous_block_to_look_at = 20
+    number_of_blocks_to_recalculate_on = 20
+    previousBlockTimes = []
+    previousBlockHash = block["blockInformation"]["previousHash"]
+    if previousBlockHash in block_information:
+        previousBlock = block_information[previousBlockHash]
+        target = previousBlock["targetWork"]
+    if block["height"] % number_of_blocks_to_recalculate_on == 0:
+        while len(previousBlockTimes) < number_of_previous_block_to_look_at:
+            if previousBlockHash in block_information:
+                previousBlock = block_information[previousBlockHash]
+                previousBlockTimes.append((previousBlock["timestamp"], previousBlock["targetWork"]))
+                previousBlockHash = previousBlock["blockInformation"]["previousHash"]
+            else:
+                break
+
+        if len(previousBlockTimes) > 0:
+            previousTarget = previousBlockTimes[0][1]
+            
+            time_difference = block["timestamp"] - previousBlockTimes[-1][0] #difference in seconds
+
+            expected_difference = targetInterval * len(previousBlockTimes)
+
+            difficulty_change = math.log(time_difference / expected_difference, 2.0)
+            target = previousTarget - difficulty_change
+
+    return target
+
 def calculate_target_work_for_block(block):
+    return bitcoin_difficulty(block)
     global block_information
     target = 20
     targetInterval = 2 #interval in seconds
@@ -202,8 +236,10 @@ def get_last_n_blocks(blockHash, n = 100):
             break
 
     return jsonify(blocks)
+squares = [2**x for x in range(255, -1, -1)]
 
 def hash_block_information(block_data, seed = False):
+    global squares
     prevHash = block_data.get("previousHash", None)
     name = block_data.get("name", None)
     nonce = block_data.get("nonce", None)
@@ -220,21 +256,29 @@ def hash_block_information(block_data, seed = False):
     if len(block_string) > 100:
         raise ValueError("Block string is over 100 characters")
     block_hash = hashlib.sha256(block_string.encode("utf-8")).hexdigest()
-    work = 0
-    for c in block_hash:
-        if c <= '0':
-            work += 4
-        elif c <= '1':
-            work += 3
+    work = 0.0
+    block_hash_value = int(block_hash, 16)
+    first_one = True
+    first_one_count = 0
+    print(block_hash)
+    print(block_hash_value)
+    for i in range(len(squares)):
+        if block_hash_value - squares[i] < 0: # Case bit is a 0
+            if first_one:
+                work += 1
+            else:
+                work += 1 / squares[255 - first_one_count]
+                first_one_count += 1
+        else: # Case bit is 1
+            block_hash_value =  block_hash_value - squares[i]
+            if first_one:
+                first_one = False
+                first_one_count += 1
+            else:
+                first_one_count += 1
+        if first_one_count >= 10:
             break
-        elif c <= '3':
-            work += 2
-            break
-        elif c <= '7':
-            work += 1
-            break
-        else:
-            break
+
     return {
         "blockHash": block_hash, 
         "work": work

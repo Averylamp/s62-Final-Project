@@ -26,7 +26,7 @@ type Block struct {
 	PrevHash   Hash
 	Name       string
 	Nonce      string
-	TargetWork int64
+	TargetWork float64
 }
 
 // ToString turns a block into an ascii string which can be sent over the
@@ -84,7 +84,7 @@ func main() {
 	if len(argsWithoutProg) == 4 {
 		cachedServerBlock = new(ServerBlock)
 		cachedServerBlock.PreviousHash = argsWithoutProg[0]
-		targetWork, err := strconv.ParseInt(argsWithoutProg[1], 10, 64)
+		targetWork, err := strconv.ParseFloat(argsWithoutProg[1], 64)
 		if err != nil {
 			panic(err)
 		}
@@ -93,6 +93,7 @@ func main() {
 
 		cpus, err = strconv.Atoi(argsWithoutProg[3])
 	} else if len(argsWithoutProg) == 1 {
+		cachingEnable = false
 		cpus, _ = strconv.Atoi(argsWithoutProg[0])
 	}
 	// Your code here!
@@ -112,7 +113,7 @@ func main() {
 
 				select {
 				case newTip := <-tipChannel:
-					fmt.Println("received new Tip on Thread: ", coreNum, ", ", newTip.ToString())
+					// fmt.Println("received new Tip on Thread:", coreNum, ", ", newTip.ToString())
 					currentTip = newTip
 					count = coreNum
 					firstTip = false
@@ -131,7 +132,7 @@ func main() {
 					if count%10000000 == 0 {
 						fmt.Println(generatedBlock.ToString())
 					}
-					if generatedBlock.ValidMine(int(currentTip.TargetWork)) {
+					if generatedBlock.ValidMine(currentTip.TargetWork) {
 						fmt.Println("Submitting block from ", coreNum)
 						calculatedBlockChannel <- generatedBlock
 					}
@@ -149,7 +150,7 @@ func main() {
 			fmt.Println("Submitting block " + calculatedBlock.ToString())
 			SendBlockToServer(calculatedBlock)
 			break
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(1000 * time.Millisecond):
 			break
 		}
 		//fmt.Println("Fetching Tip")
@@ -159,21 +160,22 @@ func main() {
 		}
 		if currentTip != tip {
 			fmt.Println("New tip found ")
-
-			select {
-			case x, ok := <-calculatedBlockChannel: // Clears double blocks
-				if ok {
-					fmt.Printf("Value %d was read.\n", x)
-				} else {
-					fmt.Println("Channel closed!")
+			for i := 0; i < cpus; i++ {
+				select {
+				case x, ok := <-calculatedBlockChannel: // Clears double blocks
+					if ok {
+						fmt.Printf("Value %d was read.\n", x)
+					} else {
+						fmt.Println("Channel closed!")
+					}
+				default:
+					break
 				}
-			default:
-				break
 			}
 
 			currentTip = tip
 			for i := 0; i < cpus; i++ {
-				fmt.Println("Sending tip to ", i)
+				// fmt.Println("Sending tip to ", i)
 				currentTipChannels[i] <- currentTip
 			}
 		} else {
